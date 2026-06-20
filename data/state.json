@@ -1,0 +1,166 @@
+{
+  "songs": [
+    {
+      "id": "song-1",
+      "title": "Bapa Engkau Sungguh Baik",
+      "artist": "Symphony Worship",
+      "key": "G",
+      "sections": [
+        {
+          "type": "V1",
+          "label": "Verse 1",
+          "lines": [
+            "Bapa Engkau sungguh baik",
+            "KasihMu nyata dalam hidupku"
+          ]
+        },
+        {
+          "type": "CH",
+          "label": "Chorus",
+          "lines": [
+            "Haleluya, kami memujiMu",
+            "Haleluya, selamanya"
+          ]
+        },
+        {
+          "type": "V2",
+          "label": "Verse 2",
+          "lines": [
+            "Dalam segala keadaan",
+            "TanganMu yang menopangku"
+          ]
+        },
+        {
+          "type": "BR",
+          "label": "Bridge",
+          "lines": [
+            "Kemuliaan bagiMu Tuhan",
+            "Selama-lamanya"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "song-2",
+      "title": "Kaulah Segalanya",
+      "artist": "JPCC Worship",
+      "key": "D",
+      "sections": [
+        {
+          "type": "V1",
+          "label": "Verse 1",
+          "lines": [
+            "Kau dan aku adalah satu",
+            "Di dalam kasih Tuhan kita berdiri"
+          ]
+        },
+        {
+          "type": "CH",
+          "label": "Chorus",
+          "lines": [
+            "Kaulah segalanya dalam hidupku",
+            "Penolongku yang setia saat kubutuh"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "song-3",
+      "title": "Amazing Grace",
+      "artist": "John Newton",
+      "key": "C",
+      "sections": [
+        {
+          "type": "V1",
+          "label": "Verse 1",
+          "lines": [
+            "Amazing grace, how sweet the sound",
+            "That saved a wretch like me"
+          ]
+        },
+        {
+          "type": "V2",
+          "label": "Verse 2",
+          "lines": [
+            "I once was lost, but now am found",
+            "Was blind, but now I see"
+          ]
+        }
+      ]
+    }
+  ],
+  "overlay_states": {
+    "lumen-123": {
+      "workspace_id": "lumen-123",
+      "active_song_id": "",
+      "active_section_index": -1,
+      "active_line_index": -1,
+      "overlay_type": "lyric",
+      "shader_mode": "Silk Ribbons",
+      "shader_config": {
+        "saturation": 0.5,
+        "speed": 0.3
+      },
+      "is_cleared": true,
+      "bible_verse": {
+        "reference": "Yohanes 3:16",
+        "text_id": "Karena begitu besar kasih Allah akan dunia ini, sehingga Ia telah mengaruniakan Anak-Nya yang tunggal, supaya setiap orang yang percaya kepada-Nya tidak binasa, melainkan beroleh hidup yang kekal.",
+        "text_en": "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life."
+      },
+      "lower_third": {
+        "name": "",
+        "role": "",
+        "template": "Slide Bottom",
+        "visible": false
+      },
+      "updated_at": 1781938800000
+    },
+    "agstprojects": {
+      "active_song_id": "75fab4cb-d40d-4732-90de-de4dfe9c1eda",
+      "active_section_index": 0,
+      "active_line_index": 0,
+      "is_cleared": true,
+      "overlay_type": "lyric",
+      "workspace_id": "agstprojects",
+      "updated_at": 1781892211051,
+      "shader_mode": "Halftone",
+      "shader_config": {
+        "saturation": 0.5,
+        "speed": 0.3
+      },
+      "bible_verse": {
+        "reference": "Yohanes 3:16",
+        "text_id": "Karena begitu besar kasih Allah akan dunia ini, sehingga Ia telah mengaruniakan Anak-Nya yang tunggal, supaya setiap orang yang percaya kepada-Nya tidak binasa, melainkan beroleh hidup yang kekal.",
+        "text_en": "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life.",
+        "display_mode": "id",
+        "template": "Classic Box"
+      },
+      "lower_third": {
+        "id": "lt-1781892161142",
+        "name": "asdasda",
+        "role": "sdasdasdasdasdasd",
+        "template": "Clean Cyan",
+        "anim_in": "Slide from left",
+        "anim_out": "Fade out",
+        "duration_in": "0.6s",
+        "duration_out": "0.4s",
+        "visible": false
+      },
+      "shader_active": false,
+      "lower_thirds": [],
+      "running_text": {
+        "text": "Selamat beribadah di Lumen Church - Tuhan Yesus memberkati ibadah kita hari ini!",
+        "speed": 1,
+        "scale": 1,
+        "bg_color": "#000000",
+        "font_family": "Inter",
+        "visible": false
+      },
+      "lower_third_config": {
+        "x": -69,
+        "y": 29,
+        "scale": 1.1
+      }
+    }
+  }
+}
