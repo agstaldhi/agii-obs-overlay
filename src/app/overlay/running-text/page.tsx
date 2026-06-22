@@ -133,32 +133,35 @@ function OverlayRunningTextContent() {
           align-items: center;
         }
 
-        .marquee-text {
+        .marquee-track {
+          display: flex;
           white-space: nowrap;
-          display: inline-block;
-          padding-left: 1920px; /* start off-screen right */
-          animation: marquee-scroll linear infinite;
+          animation: marquee-scroll-seamless linear infinite;
+          will-change: transform;
+        }
+
+        .marquee-text-span {
           font-weight: 600;
           color: #ffffff;
           text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
           letter-spacing: 0.02em;
         }
 
-        @keyframes marquee-scroll {
+        @keyframes marquee-scroll-seamless {
           0% { transform: translate3d(0, 0, 0); }
-          100% { transform: translate3d(-100%, 0, 0); }
+          100% { transform: translate3d(-50%, 0, 0); }
         }
       `}</style>
 
       <div className="marquee-container">
         <div 
-          className="marquee-text"
+          className="marquee-track"
           style={{ 
             animationDuration: getDuration(),
-            fontSize: `${20 * scale}px`
           }}
         >
-          {currentText}
+          <span className="marquee-text-span" style={{ fontSize: `${20 * scale}px`, paddingRight: '1920px' }}>{currentText}</span>
+          <span className="marquee-text-span" style={{ fontSize: `${20 * scale}px`, paddingRight: '1920px' }}>{currentText}</span>
         </div>
       </div>
     </div>

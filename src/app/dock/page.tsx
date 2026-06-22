@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, X, AlertCircle } from 'lucide-react';
 
@@ -233,22 +233,60 @@ function ObsDockContent() {
   };
 
   // Keyboard listeners inside OBS Dock
+  const activeStateRef = useRef(activeState);
+  const loadedSongRef = useRef(loadedSong);
+
+  useEffect(() => {
+    activeStateRef.current = activeState;
+  }, [activeState]);
+
+  useEffect(() => {
+    loadedSongRef.current = loadedSong;
+  }, [loadedSong]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const state = activeStateRef.current;
+      const song = loadedSongRef.current;
+      if (!song) return;
+
+      const flat = getFlatLines(song);
+      const currentIdx = getFlatIndex(flat, state.active_section_index, state.active_line_index);
+
       if (e.code === 'Space' || e.code === 'ArrowDown') {
         e.preventDefault();
-        handleNextLine();
+        if (state.is_cleared) {
+          updateState({ is_cleared: false, overlay_type: 'lyric' });
+        } else if (currentIdx < flat.length - 1) {
+          const next = flat[currentIdx + 1];
+          updateState({
+            active_section_index: next.secIdx,
+            active_line_index: next.lineIdx,
+            is_cleared: false,
+            overlay_type: 'lyric'
+          });
+        }
       } else if (e.code === 'ArrowUp') {
         e.preventDefault();
-        handlePrevLine();
+        if (state.is_cleared) {
+          updateState({ is_cleared: false, overlay_type: 'lyric' });
+        } else if (currentIdx > 0) {
+          const prev = flat[currentIdx - 1];
+          updateState({
+            active_section_index: prev.secIdx,
+            active_line_index: prev.lineIdx,
+            is_cleared: false,
+            overlay_type: 'lyric'
+          });
+        }
       } else if (e.code === 'Escape') {
         e.preventDefault();
-        handleClearLyrics();
+        updateState({ is_cleared: true });
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [loadedSong, activeState]);
+  }, []);
 
   // Decoupled selective clear handlers
   const handleClearLyrics = async () => {
@@ -338,6 +376,24 @@ function ObsDockContent() {
       currentOnScreenText = isEn ? activeState.bible_verse.text_en : activeState.bible_verse.text_id;
     } else if (activeState.overlay_type === 'lower-third' && activeState.lower_third?.visible) {
       currentOnScreenText = `${activeState.lower_third.name} - ${activeState.lower_third.role}`;
+    }
+  }
+
+  if (activeState.running_text?.visible) {
+    const runningDesc = `[Text] ${activeState.running_text.text?.slice(0, 30)}${activeState.running_text.text?.length > 30 ? '...' : ''}`;
+    if (currentOnScreenText === 'SCREEN CLEAR') {
+      currentOnScreenText = runningDesc;
+    } else {
+      currentOnScreenText = `${currentOnScreenText} | ${runningDesc}`;
+    }
+  }
+
+  if (activeState.shader_active) {
+    const shaderDesc = `[Shader] ${activeState.shader_mode || 'Background'}`;
+    if (currentOnScreenText === 'SCREEN CLEAR') {
+      currentOnScreenText = shaderDesc;
+    } else {
+      currentOnScreenText = `${currentOnScreenText} | ${shaderDesc}`;
     }
   }
 
@@ -737,37 +793,62 @@ function ObsDockContent() {
         </div>
       ) : (
         <div className="dock-lt-list">
-          {(activeState?.lower_thirds !== undefined && activeState.lower_thirds.length > 0 ? activeState.lower_thirds : DEFAULT_PROFILES).map((profile: any) => {
-            const live = isProfileLive(profile.id);
-            return (
-              <div key={profile.id} className={`dock-lt-row ${live ? 'active' : ''}`}>
-                <div className="dock-lt-info">
-                  <span className="dock-lt-name">{profile.name}</span>
-                  <span className="dock-lt-role">{profile.role} · <span style={{ fontSize: '9px', opacity: 0.8 }}>{profile.template}</span></span>
+          {(() => {
+            const profilesToShow = activeState?.lower_thirds !== undefined 
+              ? activeState.lower_thirds 
+              : DEFAULT_PROFILES;
+
+            if (profilesToShow.length === 0) {
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '20px', color: 'var(--t3)', textAlign: 'center' }}>
+                  <AlertCircle size={24} style={{ marginBottom: '8px' }} />
+                  <p style={{ fontSize: '12px' }}>Belum ada profil. Buat di Dashboard → Lower 3rd.</p>
                 </div>
-                {live ? (
-                  <button className="clear-btn-small" style={{ padding: '4px 8px', fontSize: '9px', borderColor: 'var(--live)', color: 'var(--live)' }} onClick={handleHideLowerThird}>
-                    Hide
-                  </button>
-                ) : (
-                  <button className="clear-btn-small" style={{ padding: '4px 8px', fontSize: '9px', borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => handleShowLowerThird(profile)}>
-                    Show
-                  </button>
-                )}
-              </div>
-            );
-          })}
+              );
+            }
+
+            return profilesToShow.map((profile: any) => {
+              const live = isProfileLive(profile.id);
+              return (
+                <div key={profile.id} className={`dock-lt-row ${live ? 'active' : ''}`}>
+                  <div className="dock-lt-info">
+                    <span className="dock-lt-name">{profile.name}</span>
+                    <span className="dock-lt-role">{profile.role} · <span style={{ fontSize: '9px', opacity: 0.8 }}>{profile.template}</span></span>
+                  </div>
+                  {live ? (
+                    <button className="clear-btn-small" style={{ padding: '4px 8px', fontSize: '9px', borderColor: 'var(--live)', color: 'var(--live)' }} onClick={handleHideLowerThird}>
+                      Hide
+                    </button>
+                  ) : (
+                    <button className="clear-btn-small" style={{ padding: '4px 8px', fontSize: '9px', borderColor: 'var(--accent)', color: 'var(--accent)' }} onClick={() => handleShowLowerThird(profile)}>
+                      Show
+                    </button>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 
       {/* Nav Footer */}
       <footer className="dock-nav-footer">
-        <button className="dock-nav-btn" onClick={handlePrevLine} disabled={!loadedSong || activeTab !== 'lyric'}>
+        <button 
+          className="dock-nav-btn" 
+          onClick={handlePrevLine} 
+          disabled={!loadedSong || activeTab !== 'lyric' || (loadedSong && !activeState.is_cleared && getFlatIndex(flatLines, activeState.active_section_index, activeState.active_line_index) <= 0)}
+          style={{ opacity: (!loadedSong || activeTab !== 'lyric' || (loadedSong && !activeState.is_cleared && getFlatIndex(flatLines, activeState.active_section_index, activeState.active_line_index) <= 0)) ? 0.4 : 1 }}
+        >
           <ArrowLeft size={14} />
           <span>[◀ PREV]</span>
         </button>
         <div className="divider" />
-        <button className="dock-nav-btn" onClick={handleNextLine} disabled={!loadedSong || activeTab !== 'lyric'}>
+        <button 
+          className="dock-nav-btn" 
+          onClick={handleNextLine} 
+          disabled={!loadedSong || activeTab !== 'lyric' || (loadedSong && !activeState.is_cleared && getFlatIndex(flatLines, activeState.active_section_index, activeState.active_line_index) >= flatLines.length - 1)}
+          style={{ opacity: (!loadedSong || activeTab !== 'lyric' || (loadedSong && !activeState.is_cleared && getFlatIndex(flatLines, activeState.active_section_index, activeState.active_line_index) >= flatLines.length - 1)) ? 0.4 : 1 }}
+        >
           <span>[NEXT ▶]</span>
           <ArrowRight size={14} />
         </button>

@@ -113,61 +113,48 @@ function OverlayLyricContent() {
     };
   }, [workspaceId]);
  
-  // Sync active text
+  const targetTextRef = useRef('');
+ 
+  // Sync active text (target state calculation)
   useEffect(() => {
-    if (activeState.is_cleared || activeState.overlay_type !== 'lyric' || songs.length === 0) {
-      // Trigger animation OUT first, then empty the string
-      if (textRef.current && currentLineText) {
-        gsap.to(textRef.current, {
-          opacity: 0,
-          y: -15,
-          duration: 0.2,
-          ease: 'power2.in',
-          onComplete: () => setCurrentLineText('')
-        });
-      } else {
-        setCurrentLineText('');
-      }
-      return;
-    }
- 
     const currentSong = songs.find(s => s.id === activeState.active_song_id);
-    if (!currentSong) return;
+    const isCleared = activeState.is_cleared || activeState.overlay_type !== 'lyric' || songs.length === 0 || !currentSong;
+    const newLineText = isCleared 
+      ? '' 
+      : (currentSong.sections[activeState.active_section_index]?.lines[activeState.active_line_index] || '');
  
-    const sec = currentSong.sections[activeState.active_section_index];
-    const newLineText = sec?.lines[activeState.active_line_index] || '';
+    targetTextRef.current = newLineText;
  
-    if (newLineText !== currentLineText) {
-      // Transition OUT old line, then IN new line
-      if (textRef.current && currentLineText) {
-        gsap.to(textRef.current, {
-          opacity: 0,
-          y: -15,
-          duration: 0.15,
-          ease: 'power2.in',
-          onComplete: () => {
-            setCurrentLineText(newLineText);
-            // Trigger Animation IN
-            gsap.fromTo(textRef.current, 
-              { opacity: 0, y: 15 },
-              { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' }
-            );
-          }
-        });
-      } else {
-        setCurrentLineText(newLineText);
-        // Simple entry if nothing was active
-        setTimeout(() => {
-          if (textRef.current) {
-            gsap.fromTo(textRef.current, 
-              { opacity: 0, y: 15 },
-              { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' }
-            );
-          }
-        }, 50);
-      }
+    if (newLineText === currentLineText) return;
+ 
+    // Transition OUT old line
+    if (textRef.current && currentLineText) {
+      gsap.killTweensOf(textRef.current);
+      gsap.to(textRef.current, {
+        opacity: 0,
+        y: -15,
+        duration: 0.15,
+        ease: 'power2.in',
+        onComplete: () => {
+          setCurrentLineText(targetTextRef.current);
+        }
+      });
+    } else {
+      // Direct update if nothing was showing
+      setCurrentLineText(newLineText);
     }
-  }, [activeState, songs]);
+  }, [activeState, songs, currentLineText]);
+ 
+  // Trigger Animation IN when currentLineText updates to non-empty
+  useEffect(() => {
+    if (currentLineText && textRef.current) {
+      gsap.killTweensOf(textRef.current);
+      gsap.fromTo(textRef.current, 
+        { opacity: 0, y: 15 },
+        { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out' }
+      );
+    }
+  }, [currentLineText]);
  
   const config = activeState.lyric_config || { x: 0, y: 0, scale: 1.0 };
  

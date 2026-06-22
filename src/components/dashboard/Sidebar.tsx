@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Music, BookOpen, CreditCard, Type, Layers, Settings, LogOut } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 export type TabType = 'lyric' | 'bible' | 'lower-third' | 'running-text' | 'shader' | 'settings';
@@ -11,14 +11,26 @@ interface SidebarProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
   workspaceId: string;
+  activeState?: any;
 }
 
-export default function Sidebar({ activeTab, setActiveTab, workspaceId }: SidebarProps) {
+export default function Sidebar({ activeTab, setActiveTab, workspaceId, activeState }: SidebarProps) {
   const router = useRouter();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (isSupabaseConfigured) {
+      await supabase.auth.signOut();
+    }
     router.push('/');
+  };
+
+  const isLiveModule = {
+    lyric: !activeState?.is_cleared && activeState?.overlay_type === 'lyric',
+    bible: !activeState?.is_cleared && activeState?.overlay_type === 'verse',
+    'lower-third': activeState?.lower_third?.visible,
+    'running-text': activeState?.running_text?.visible,
+    shader: activeState?.shader_active,
+    settings: false
   };
 
   const navItems = [
@@ -124,6 +136,7 @@ export default function Sidebar({ activeTab, setActiveTab, workspaceId }: Sideba
         <ul className="nav-list">
           {navItems.map((item) => {
             const Icon = item.icon;
+            const live = isLiveModule[item.id as keyof typeof isLiveModule];
             return (
               <li key={item.id}>
                 <button
@@ -132,6 +145,18 @@ export default function Sidebar({ activeTab, setActiveTab, workspaceId }: Sideba
                 >
                   <Icon className="nav-icon" />
                   <span>{item.label}</span>
+                  {live && (
+                    <span 
+                      style={{ 
+                        width: '6px', 
+                        height: '6px', 
+                        borderRadius: '50%', 
+                        backgroundColor: 'var(--live, #ef4444)', 
+                        marginLeft: 'auto',
+                        boxShadow: '0 0 6px var(--live, #ef4444)'
+                      }} 
+                    />
+                  )}
                 </button>
               </li>
             );

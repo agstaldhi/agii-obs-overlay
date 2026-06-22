@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('lyric');
   const [workspaceId, setWorkspaceId] = useState('lumen-123');
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'offline'>('offline');
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const [activeState, setActiveState] = useState<any>({
     workspace_id: 'lumen-123',
     active_song_id: '',
@@ -117,7 +118,7 @@ export default function DashboardPage() {
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
-  }, [workspaceId]);
+  }, [workspaceId, reconnectTrigger]);
 
   // Update state helper (POST to /api/state)
   const updateState = async (newState: any) => {
@@ -346,9 +347,31 @@ export default function DashboardPage() {
             ) : (
               <span className="status-dot" />
             )}
-            <span style={{ textTransform: 'capitalize' }}>
+            <span style={{ textTransform: 'capitalize', marginRight: '4px' }}>
               {connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'reconnecting' ? 'Reconnecting' : 'Offline'}
             </span>
+            {connectionStatus !== 'connected' && (
+              <button 
+                onClick={() => setReconnectTrigger(prev => prev + 1)} 
+                className="btn btn-ghost" 
+                style={{ 
+                  padding: '2px 6px', 
+                  fontSize: '10px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '4px',
+                  height: '22px',
+                  lineHeight: '22px',
+                  backgroundColor: 'var(--bg-2)',
+                  border: '1px solid var(--bg-4)',
+                  borderRadius: '4px',
+                  color: 'var(--t2)',
+                  cursor: 'pointer'
+                }}
+              >
+                <RefreshCw size={10} /> Reconnect
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -356,7 +379,7 @@ export default function DashboardPage() {
       {/* Main Container */}
       <div className="dashboard-container">
         {/* Sidebar */}
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} workspaceId={workspaceId} />
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} workspaceId={workspaceId} activeState={activeState} />
 
         {/* Content area */}
         <main className="dashboard-main-area">

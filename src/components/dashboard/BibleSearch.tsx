@@ -15,6 +15,7 @@ const BIBLE_BOOKS = [
   { id: 'kejadian', name: 'Kejadian', chapters: 50 },
   { id: 'keluaran', name: 'Keluaran', chapters: 40 },
   { id: 'imamat', name: 'Imamat', chapters: 27 },
+  { id: 'bilangan', name: 'Bilangan', chapters: 36 },
   { id: 'ulangan', name: 'Ulangan', chapters: 34 },
   { id: 'yosua', name: 'Yosua', chapters: 24 },
   { id: 'hakim-hakim', name: 'Hakim-hakim', chapters: 21 },
@@ -103,6 +104,75 @@ const LOCAL_VERSES: Record<string, { ref: string; id: string; en: string }> = {
   }
 };
 
+const BIBLE_BOOKS_ENG_MAP: Record<string, string> = {
+  'kejadian': 'genesis',
+  'keluaran': 'exodus',
+  'imamat': 'leviticus',
+  'bilangan': 'numbers',
+  'ulangan': 'deuteronomy',
+  'yosua': 'joshua',
+  'hakim-hakim': 'judges',
+  'rut': 'ruth',
+  '1-samuel': '1 samuel',
+  '2-samuel': '2 samuel',
+  '1-raja-raja': '1 kings',
+  '2-raja-raja': '2 kings',
+  '1-tawarikh': '1 chronicles',
+  '2-tawarikh': '2 chronicles',
+  'ezra': 'ezra',
+  'nehemia': 'nehemiah',
+  'ester': 'esther',
+  'ayub': 'job',
+  'mazmur': 'psalms',
+  'amsal': 'proverbs',
+  'pengkhotbah': 'ecclesiastes',
+  'kidung-agung': 'song of solomon',
+  'yesaya': 'isaiah',
+  'yeremia': 'jeremiah',
+  'ratapan': 'lamentations',
+  'yehezkiel': 'ezekiel',
+  'daniel': 'daniel',
+  'hosea': 'hosea',
+  'yoel': 'joel',
+  'amos': 'amos',
+  'obaja': 'obadiah',
+  'yunus': 'jonah',
+  'mikha': 'micah',
+  'nahum': 'nahum',
+  'habakuk': 'habakkuk',
+  'zefanya': 'zephaniah',
+  'hagai': 'haggai',
+  'zakharia': 'zechariah',
+  'maleakhi': 'malachi',
+  'matius': 'matthew',
+  'markus': 'mark',
+  'lukas': 'luke',
+  'yohanes': 'john',
+  'kisah-para-rasul': 'acts',
+  'roma': 'romans',
+  '1-korintus': '1 corinthians',
+  '2-korintus': '2 corinthians',
+  'galatia': 'galatians',
+  'efesus': 'ephesians',
+  'filipi': 'philippians',
+  'kolose': 'colossians',
+  '1-tesalonika': '1 thessalonians',
+  '2-tesalonika': '2 thessalonians',
+  '1-timotius': '1 timothy',
+  '2-timotius': '2 timothy',
+  'titus': 'titus',
+  'filemon': 'philemon',
+  'ibrani': 'hebrews',
+  'yakobus': 'james',
+  '1-petrus': '1 peter',
+  '2-petrus': '2 peter',
+  '1-yohanes': '1 john',
+  '2-yohanes': '2 john',
+  '3-yohanes': '3 john',
+  'yudas': 'jude',
+  'wahyu': 'revelation'
+};
+
 export default function BibleSearch({ workspaceId, activeState, updateState }: BibleSearchProps) {
   // Select state
   const [selectedBook, setSelectedBook] = useState('yohanes');
@@ -110,7 +180,7 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
   const [selectedVerse, setSelectedVerse] = useState(16);
 
   // Languages configurations
-  const [displayMode, setDisplayMode] = useState<'id' | 'en'>('id');
+  const [displayMode, setDisplayMode] = useState<'id' | 'en' | 'both'>('id');
   const [translationId, setTranslationId] = useState('TB');
   const [translationEn, setTranslationEn] = useState('NIV');
   const [selectedTemplate, setSelectedTemplate] = useState('Classic Box');
@@ -149,17 +219,17 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
   }, [selectedBook]);
 
   // Load verse from database/API when selections change
-  const loadSelectedVerse = async () => {
+  const loadSelectedVerse = async (signal?: AbortSignal) => {
     setError(null);
     setLoading(true);
 
     const bookName = currentBookMeta.name;
-    const refString = `${bookName} ${selectedChapter}:${selectedVerse}`;
     const cleanLookupKey = `${bookName.toLowerCase()} ${selectedChapter}:${selectedVerse}`;
 
     // 1. Check local database
     if (LOCAL_VERSES[cleanLookupKey]) {
       const match = LOCAL_VERSES[cleanLookupKey];
+      if (signal?.aborted) return;
       setTextId(match.id);
       setTextEn(match.en);
       setLoading(false);
@@ -169,32 +239,42 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
     // 2. Fetch from free public API
     try {
       // Map Indonesian book names to English equivalent for public API
-      let searchRef = `${selectedBook} ${selectedChapter}:${selectedVerse}`;
-      if (selectedBook === 'kejadian') searchRef = `genesis ${selectedChapter}:${selectedVerse}`;
-      if (selectedBook === 'yohanes') searchRef = `john ${selectedChapter}:${selectedVerse}`;
-      if (selectedBook === 'mazmur') searchRef = `psalms ${selectedChapter}:${selectedVerse}`;
-      if (selectedBook === 'matius') searchRef = `matthew ${selectedChapter}:${selectedVerse}`;
+      const englishBookName = BIBLE_BOOKS_ENG_MAP[selectedBook] || selectedBook;
+      const searchRef = `${englishBookName} ${selectedChapter}:${selectedVerse}`;
 
-      const res = await fetch(`https://bible-api.com/${encodeURIComponent(searchRef)}`);
+      const res = await fetch(`https://bible-api.com/${encodeURIComponent(searchRef)}`, { signal });
       if (res.ok) {
         const data = await res.json();
+        if (signal?.aborted) return;
         const apiText = data.text.trim();
         setTextEn(apiText);
         // Translate mock or show same text if translation fails
         setTextId(apiText + ' (Terjemahan otomatis/kosong - silakan edit manual)');
       } else {
+        if (signal?.aborted) return;
         setError('Ayat tidak ditemukan di server API.');
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError' || signal?.aborted) return;
       setError('Gagal memuat dari API. Silakan isi teks secara manual di bawah.');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   };
 
   // Trigger load when selection finishes
   useEffect(() => {
-    loadSelectedVerse();
+    const controller = new AbortController();
+    const handler = setTimeout(() => {
+      loadSelectedVerse(controller.signal);
+    }, 250);
+
+    return () => {
+      clearTimeout(handler);
+      controller.abort();
+    };
   }, [selectedBook, selectedChapter, selectedVerse]);
 
   const handleSendToOBS = async () => {
@@ -512,8 +592,8 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
             value={selectedVerse} 
             onChange={(e) => setSelectedVerse(parseInt(e.target.value))}
           >
-            {/* Render 1 to 50 verses for selection */}
-            {Array.from({ length: 50 }, (_, i) => i + 1).map((v) => (
+            {/* Render 1 to 200 verses for selection */}
+            {Array.from({ length: 200 }, (_, i) => i + 1).map((v) => (
               <option key={v} value={v}>
                 {v}
               </option>
@@ -543,6 +623,15 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
               onChange={() => setDisplayMode('en')} 
             />
             <span>Hanya English (NIV/WEB)</span>
+          </label>
+          <label className="radio-label">
+            <input 
+              type="radio" 
+              name="langMode" 
+              checked={displayMode === 'both'} 
+              onChange={() => setDisplayMode('both')} 
+            />
+            <span>Dual Bahasa (ID + EN)</span>
           </label>
         </div>
       </div>
@@ -603,7 +692,10 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
 
       {/* Embed Stage Preview */}
       <div>
-        <div className="section-label" style={{ marginBottom: 'var(--space-sm)' }}>Stage Preview (Alkitab)</div>
+        <div className="section-label" style={{ marginBottom: 'var(--space-sm)', display: 'flex', justifyContent: 'space-between' }}>
+          <span>Stage Preview (Alkitab)</span>
+          <span style={{ color: 'var(--accent)', fontSize: '10px', fontWeight: 'bold' }}>PREVIEW EDIT</span>
+        </div>
         <StagePreview state={{ ...activeState, overlay_type: 'verse', bible_verse: { reference: `${currentBookMeta.name} ${selectedChapter}:${selectedVerse}`, text_id: textId, text_en: textEn, display_mode: displayMode, template: selectedTemplate } }} />
       </div>
 
@@ -611,7 +703,7 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
       <div className="preview-wrapper">
         <div className="section-label" style={{ color: 'var(--t2)' }}>Sesuaikan Isi Ayat sebelum dikirim ke OBS</div>
         
-        {displayMode === 'id' && (
+        {(displayMode === 'id' || displayMode === 'both') && (
           <div className="login-form-group" style={{ marginTop: 'var(--space-sm)' }}>
             <label className="login-form-label" style={{ fontSize: '10px' }}>Indonesia (ID)</label>
             <textarea
@@ -623,7 +715,7 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
           </div>
         )}
 
-        {displayMode === 'en' && (
+        {(displayMode === 'en' || displayMode === 'both') && (
           <div className="login-form-group" style={{ marginTop: 'var(--space-sm)' }}>
             <label className="login-form-label" style={{ fontSize: '10px' }}>English (EN)</label>
             <textarea
@@ -653,7 +745,10 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
         <div className="section-label" style={{ marginBottom: 'var(--space-sm)', color: 'var(--t2)' }}>Tata Letak & Skala Ayat Alkitab</div>
         <div className="slider-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)' }}>
           <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser X: {verseConfig.x}px</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser X: {verseConfig.x}px</span>
+              <button onClick={() => handleConfigChange('x', 0)} title="Reset ke 0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+            </div>
             <input 
               type="range" 
               min="-500" 
@@ -664,7 +759,10 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
             />
           </div>
           <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser Y: {verseConfig.y}px</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser Y: {verseConfig.y}px</span>
+              <button onClick={() => handleConfigChange('y', 0)} title="Reset ke 0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+            </div>
             <input 
               type="range" 
               min="-500" 
@@ -675,7 +773,10 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
             />
           </div>
           <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Skala: {verseConfig.scale.toFixed(1)}x</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Skala: {verseConfig.scale.toFixed(1)}x</span>
+              <button onClick={() => handleConfigChange('scale', 1.0)} title="Reset ke 1.0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+            </div>
             <input 
               type="range" 
               min="0.5" 

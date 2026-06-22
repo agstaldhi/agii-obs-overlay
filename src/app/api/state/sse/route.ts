@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server';
 
 // Initialize global client registry
-if (!(global as any).sseClients) {
+if (!(global as any).__sseClients_initialized) {
   (global as any).sseClients = new Map();
+  (global as any).__sseClients_initialized = true;
 }
 
 export async function GET(req: NextRequest) {
@@ -13,9 +14,13 @@ export async function GET(req: NextRequest) {
     return new Response('Workspace ID (w) is required', { status: 400 });
   }
 
+  let pingInterval: ReturnType<typeof setInterval>;
+  let activeController: ReadableStreamDefaultController;
+
   // Setup streaming response
   const stream = new ReadableStream({
     start(controller) {
+      activeController = controller;
       // Get or create set for this workspace
       if (!(global as any).sseClients) {
         (global as any).sseClients = new Map();
@@ -34,7 +39,7 @@ export async function GET(req: NextRequest) {
       controller.enqueue(encoder.encode(': connected\n\n'));
 
       // Keep-alive ping interval
-      const pingInterval = setInterval(() => {
+      pingInterval = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(': ping\n\n'));
         } catch (e) {
@@ -51,9 +56,12 @@ export async function GET(req: NextRequest) {
     },
     cancel() {
       // Clean up connection if closed
+      if (pingInterval) {
+        clearInterval(pingInterval);
+      }
       const workspaceClients = (global as any).sseClients?.get(workspaceId);
-      if (workspaceClients) {
-        // Find and remove this controller from the set (handled in start's signal listener too)
+      if (workspaceClients && activeController) {
+        workspaceClients.delete(activeController);
       }
     }
   });
@@ -66,3 +74,4 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+

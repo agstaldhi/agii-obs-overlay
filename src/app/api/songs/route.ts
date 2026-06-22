@@ -160,3 +160,112 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to add song: ' + error.message }, { status: 500 });
   }
 }
+
+// PUT /api/songs
+export async function PUT(req: NextRequest) {
+  try {
+    const songData = await req.json();
+    if (!songData.id || !songData.title || !songData.sections || songData.sections.length === 0) {
+      return NextResponse.json({ error: 'ID, Title, and sections are required' }, { status: 400 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const workspaceId = searchParams.get('w') || (await cookies()).get('lumen-workspace')?.value || 'lumen-123';
+
+    const formattedSong = {
+      title: songData.title,
+      artist: songData.artist || 'Unknown Artist',
+      key: songData.key || 'C',
+      sections: songData.sections.map((section: any, idx: number) => ({
+        type: section.type || `V${idx + 1}`,
+        label: section.label || `Verse ${idx + 1}`,
+        lines: section.lines || []
+      }))
+    };
+
+    // 1. Update in Supabase if configured
+    if (isSupabaseConfigured) {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('songs')
+          .update({
+            title: formattedSong.title,
+            artist: formattedSong.artist,
+            key: formattedSong.key,
+            sections: formattedSong.sections
+          })
+          .eq('id', songData.id)
+          .eq('workspace_id', workspaceId)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return NextResponse.json({ success: true, song: data });
+      } catch (err: any) {
+        console.error('Supabase update failed, falling back to local file:', err);
+      }
+    }
+
+    // 2. Update locally
+    const db = readStateFile();
+    if (!db.songs) db.songs = [];
+
+    const songIndex = db.songs.findIndex((s: any) => s.id === songData.id);
+    if (songIndex === -1) {
+      return NextResponse.json({ error: 'Song not found' }, { status: 404 });
+    }
+
+    const updatedSong = {
+      ...db.songs[songIndex],
+      ...formattedSong
+    };
+
+    db.songs[songIndex] = updatedSong;
+    writeStateFile(db);
+
+    return NextResponse.json({ success: true, song: updatedSong });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Failed to update song: ' + error.message }, { status: 500 });
+  }
+}
+
+// DELETE /api/songs?id=song_id
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const workspaceId = searchParams.get('w') || (await cookies()).get('lumen-workspace')?.value || 'lumen-123';
+
+    if (!id) {
+      return NextResponse.json({ error: 'Song ID (id) is required' }, { status: 400 });
+    }
+
+    // 1. Delete from Supabase if configured
+    if (isSupabaseConfigured) {
+      try {
+        const { error } = await (supabase as any)
+          .from('songs')
+          .delete()
+          .eq('id', id)
+          .eq('workspace_id', workspaceId);
+
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      } catch (err: any) {
+        console.error('Supabase delete failed, falling back to local file:', err);
+      }
+    }
+
+    // 2. Delete locally
+    const db = readStateFile();
+    if (db.songs) {
+      db.songs = db.songs.filter((s: any) => s.id !== id);
+      writeStateFile(db);
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: 'Failed to delete song: ' + error.message }, { status: 500 });
+  }
+}
+

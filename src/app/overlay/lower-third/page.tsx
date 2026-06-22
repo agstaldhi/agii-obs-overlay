@@ -75,6 +75,13 @@ function OverlayLowerThirdContent() {
     };
   }, [workspaceId]);
 
+  // Helper to parse duration string (e.g. "0.6s" -> 0.6)
+  const parseDuration = (durStr: string, fallback: number): number => {
+    if (!durStr) return fallback;
+    const val = parseFloat(durStr);
+    return isNaN(val) ? fallback : val;
+  };
+
   // Handle active lower third transitions
   useEffect(() => {
     const isVisible = !activeState.is_cleared && activeState.overlay_type === 'lower-third' && activeState.lower_third?.visible;
@@ -83,6 +90,7 @@ function OverlayLowerThirdContent() {
       if (cardRef.current && currentLT) {
         // Trigger Out Animation
         const animOutType = activeState.lower_third?.anim_out || 'Fade out';
+        const durationOut = parseDuration(activeState.lower_third?.duration_out, 0.35);
         let animationProps = {};
         
         if (animOutType === 'Slide right') {
@@ -93,9 +101,10 @@ function OverlayLowerThirdContent() {
           animationProps = { opacity: 0 };
         }
 
+        gsap.killTweensOf(cardRef.current);
         gsap.to(cardRef.current, {
           ...animationProps,
-          duration: 0.35,
+          duration: durationOut,
           ease: 'power2.in',
           onComplete: () => setCurrentLT(null)
         });
@@ -110,6 +119,7 @@ function OverlayLowerThirdContent() {
     if (JSON.stringify(nextLT) !== JSON.stringify(currentLT)) {
       if (cardRef.current && currentLT) {
         // Hide old, then show new
+        gsap.killTweensOf(cardRef.current);
         gsap.to(cardRef.current, {
           opacity: 0,
           duration: 0.2,
@@ -117,8 +127,9 @@ function OverlayLowerThirdContent() {
             setCurrentLT(nextLT);
             // Trigger In Animation
             const animInType = nextLT.anim_in || 'Slide from left';
+            const durationIn = parseDuration(nextLT.duration_in, 0.55);
             let startProps = {};
-            let endProps = { x: 0, y: 0, opacity: 1, duration: 0.55, ease: 'power3.out' };
+            let endProps = { x: 0, y: 0, opacity: 1, duration: durationIn, ease: 'power3.out' };
 
             if (animInType === 'Slide from left') {
               startProps = { x: -100, opacity: 0 };
@@ -128,6 +139,7 @@ function OverlayLowerThirdContent() {
               startProps = { opacity: 0 };
             }
 
+            gsap.killTweensOf(cardRef.current);
             gsap.fromTo(cardRef.current, startProps, endProps);
           }
         });
@@ -136,8 +148,9 @@ function OverlayLowerThirdContent() {
         setTimeout(() => {
           if (cardRef.current) {
             const animInType = nextLT.anim_in || 'Slide from left';
+            const durationIn = parseDuration(nextLT.duration_in, 0.55);
             let startProps = {};
-            let endProps = { x: 0, y: 0, opacity: 1, duration: 0.55, ease: 'power3.out' };
+            let endProps = { x: 0, y: 0, opacity: 1, duration: durationIn, ease: 'power3.out' };
 
             if (animInType === 'Slide from left') {
               startProps = { x: -100, opacity: 0 };
@@ -147,6 +160,7 @@ function OverlayLowerThirdContent() {
               startProps = { opacity: 0 };
             }
 
+            gsap.killTweensOf(cardRef.current);
             gsap.fromTo(cardRef.current, startProps, endProps);
           }
         }, 50);

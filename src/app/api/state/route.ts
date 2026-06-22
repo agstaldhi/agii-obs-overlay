@@ -19,20 +19,33 @@ function readStateFile() {
   }
 }
 
-// Helper to write state to file
-function writeStateFile(data: any) {
+let writeQueue: Promise<void> = Promise.resolve();
+
+// Helper to write state to file (atomic queue)
+async function writeStateFile(data: any): Promise<boolean> {
   try {
     // Ensure dir exists
     const dir = path.dirname(STATE_FILE_PATH);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(STATE_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
-    return true;
-  } catch (error) {
-    console.error('Error writing state file:', error);
-    return false;
+  } catch (err) {
+    console.error('Error creating directory:', err);
   }
+
+  return new Promise<boolean>((resolve) => {
+    writeQueue = writeQueue.then(async () => {
+      try {
+        const tmp = STATE_FILE_PATH + '.tmp';
+        await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf-8');
+        await fs.promises.rename(tmp, STATE_FILE_PATH);
+        resolve(true);
+      } catch (error) {
+        console.error('Error writing state file:', error);
+        resolve(false);
+      }
+    });
+  });
 }
 
 // Helper to trigger SSE notifications for a workspace
@@ -115,7 +128,7 @@ export async function POST(req: NextRequest) {
     };
 
     db.overlay_states[workspaceId] = updatedWorkspaceState;
-    writeStateFile(db);
+    await writeStateFile(db);
 
     // Notify all active SSE clients
     notifySSEWorkspace(workspaceId, updatedWorkspaceState);
@@ -125,3 +138,4 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to update state: ' + error.message }, { status: 500 });
   }
 }
+

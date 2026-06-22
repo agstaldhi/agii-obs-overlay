@@ -104,6 +104,11 @@ export default function LowerThirdForm({ workspaceId, activeState, updateState }
   };
 
   const handleDeleteProfile = (id: string) => {
+    const profile = profiles.find(p => p.id === id);
+    const profileName = profile ? profile.name : 'pembicara';
+    if (!confirm(`Apakah Anda yakin ingin menghapus profil "${profileName}"?`)) {
+      return;
+    }
     const updated = profiles.filter(p => p.id !== id);
     saveProfilesList(updated);
   };
@@ -668,7 +673,10 @@ export default function LowerThirdForm({ workspaceId, activeState, updateState }
         <div className="section-label" style={{ marginBottom: 'var(--space-sm)', color: 'var(--t2)' }}>Tata Letak & Skala Lower Third</div>
         <div className="slider-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)' }}>
           <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser X: {lowerThirdConfig.x}px</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser X: {lowerThirdConfig.x}px</span>
+              <button onClick={() => handleConfigChange('x', 0)} title="Reset ke 0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+            </div>
             <input 
               type="range" 
               min="-500" 
@@ -679,7 +687,10 @@ export default function LowerThirdForm({ workspaceId, activeState, updateState }
             />
           </div>
           <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser Y: {lowerThirdConfig.y}px</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser Y: {lowerThirdConfig.y}px</span>
+              <button onClick={() => handleConfigChange('y', 0)} title="Reset ke 0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+            </div>
             <input 
               type="range" 
               min="-500" 
@@ -690,7 +701,10 @@ export default function LowerThirdForm({ workspaceId, activeState, updateState }
             />
           </div>
           <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Skala: {lowerThirdConfig.scale.toFixed(1)}x</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Skala: {lowerThirdConfig.scale.toFixed(1)}x</span>
+              <button onClick={() => handleConfigChange('scale', 1.0)} title="Reset ke 1.0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+            </div>
             <input 
               type="range" 
               min="0.5" 

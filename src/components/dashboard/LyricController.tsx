@@ -30,6 +30,7 @@ export default function LyricController({ workspaceId, activeState, updateState 
   const [searchResults, setSearchResults] = useState<Song[]>([]);
   const [loadedSong, setLoadedSong] = useState<Song | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingSong, setEditingSong] = useState<Song | null>(null);
 
   // New song form state
   const [newTitle, setNewTitle] = useState('');
@@ -58,6 +59,12 @@ export default function LyricController({ workspaceId, activeState, updateState 
   // Fetch specific loaded song if state has active_song_id
   useEffect(() => {
     if (activeState?.active_song_id) {
+      // Cek cache lokal songs dulu
+      const found = songs.find(s => s.id === activeState.active_song_id);
+      if (found) {
+        setLoadedSong(found);
+        return;
+      }
       const fetchLoadedSong = async () => {
         try {
           const res = await fetch(`/api/songs?w=${workspaceId}`);
@@ -74,7 +81,7 @@ export default function LyricController({ workspaceId, activeState, updateState 
     } else {
       setLoadedSong(null);
     }
-  }, [activeState?.active_song_id]);
+  }, [activeState?.active_song_id, songs]);
 
   // Handle Search
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,12 +96,16 @@ export default function LyricController({ workspaceId, activeState, updateState 
 
   // Load song to controller
   const handleLoadSong = async (song: Song) => {
+    if (loadedSong && !activeState?.is_cleared) {
+      if (!confirm(`Layar jemaat sedang menampilkan "${loadedSong.title}". Ganti lagu sekarang?`)) {
+        return;
+      }
+    }
     setLoadedSong(song);
     await updateState({
       active_song_id: song.id,
       active_section_index: 0,
       active_line_index: 0,
-      is_cleared: false,
       overlay_type: 'lyric'
     });
   };
@@ -215,7 +226,52 @@ export default function LyricController({ workspaceId, activeState, updateState 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [loadedSong, activeState]);
 
-  // Create new song
+  const getReconstructedLyrics = (song: Song) => {
+    return song.sections.map(sec => {
+      const header = `[${sec.label}]`;
+      const linesText = sec.lines.join('\n');
+      return `${header}\n${linesText}`;
+    }).join('\n\n');
+  };
+
+  const handleEditClick = (song: Song) => {
+    setEditingSong(song);
+    setNewTitle(song.title);
+    setNewArtist(song.artist);
+    setNewKey(song.key);
+    setNewLyricText(getReconstructedLyrics(song));
+    setShowAddModal(true);
+  };
+
+  const handleDeleteSong = async (id: string, title: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus lagu "${title}"?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/songs?id=${id}&w=${workspaceId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchSongs(searchQuery);
+      } else {
+        alert('Gagal menghapus lagu.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat menghapus lagu.');
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setEditingSong(null);
+    setNewTitle('');
+    setNewArtist('');
+    setNewKey('G');
+    setNewLyricText('');
+  };
+
+  // Create or Update song
   const handleCreateSong = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim()) return;
@@ -265,15 +321,16 @@ export default function LyricController({ workspaceId, activeState, updateState 
     });
 
     try {
-      const res = await fetch(`/api/songs?w=${workspaceId}`, {
-        method: 'POST',
+      const url = `/api/songs?w=${workspaceId}`;
+      const method = editingSong ? 'PUT' : 'POST';
+      const bodyData = editingSong 
+        ? { id: editingSong.id, title: newTitle, artist: newArtist, key: newKey, sections }
+        : { title: newTitle, artist: newArtist, key: newKey, sections };
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newTitle,
-          artist: newArtist,
-          key: newKey,
-          sections
-        })
+        body: JSON.stringify(bodyData)
       });
 
       if (res.ok) {
@@ -281,11 +338,15 @@ export default function LyricController({ workspaceId, activeState, updateState 
         setNewArtist('');
         setNewKey('G');
         setNewLyricText('');
+        setEditingSong(null);
         setShowAddModal(false);
-        fetchSongs();
+        fetchSongs(searchQuery);
+      } else {
+        alert(editingSong ? 'Gagal mengupdate lagu.' : 'Gagal menyimpan lagu.');
       }
     } catch (err) {
       console.error(err);
+      alert('Terjadi kesalahan.');
     }
   };
 
@@ -560,9 +621,17 @@ export default function LyricController({ workspaceId, activeState, updateState 
                 <span className="song-artist">{song.artist}</span>
                 <span className="badge-key">{song.key}</span>
               </div>
-              <button className="btn btn-ghost btn-secondary" style={{ padding: '4px 12px', fontSize: '11px' }} onClick={() => handleLoadSong(song)}>
-                Load ke Controller
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button className="btn btn-ghost btn-secondary" style={{ padding: '4px 12px', fontSize: '11px' }} onClick={() => handleLoadSong(song)}>
+                  Load ke Controller
+                </button>
+                <button className="btn btn-ghost btn-secondary" style={{ padding: '4px 8px', fontSize: '11px' }} onClick={() => handleEditClick(song)} title="Edit Lagu">
+                  Edit
+                </button>
+                <button className="btn btn-ghost" style={{ padding: '4px', color: 'var(--live)' }} onClick={() => handleDeleteSong(song.id, song.title)} title="Hapus Lagu">
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -640,7 +709,10 @@ export default function LyricController({ workspaceId, activeState, updateState 
             <div className="section-label" style={{ marginBottom: 'var(--space-sm)', color: 'var(--t2)' }}>Tata Letak & Skala Lirik</div>
             <div className="slider-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)' }}>
               <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser X: {lyricConfig.x}px</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser X: {lyricConfig.x}px</span>
+                  <button onClick={() => handleConfigChange('x', 0)} title="Reset ke 0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+                </div>
                 <input 
                   type="range" 
                   min="-500" 
@@ -651,7 +723,10 @@ export default function LyricController({ workspaceId, activeState, updateState 
                 />
               </div>
               <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser Y: {lyricConfig.y}px</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Geser Y: {lyricConfig.y}px</span>
+                  <button onClick={() => handleConfigChange('y', 0)} title="Reset ke 0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+                </div>
                 <input 
                   type="range" 
                   min="-500" 
@@ -662,7 +737,10 @@ export default function LyricController({ workspaceId, activeState, updateState 
                 />
               </div>
               <div className="slider-group" style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Skala: {lyricConfig.scale.toFixed(1)}x</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="login-form-label" style={{ fontSize: '10px', color: 'var(--t2)', marginBottom: 0 }}>Skala: {lyricConfig.scale.toFixed(1)}x</span>
+                  <button onClick={() => handleConfigChange('scale', 1.0)} title="Reset ke 1.0" style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '10px' }}>↺ Reset</button>
+                </div>
                 <input 
                   type="range" 
                   min="0.5" 
@@ -680,11 +758,11 @@ export default function LyricController({ workspaceId, activeState, updateState 
 
       {/* Add Song Modal */}
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="text-headline">Tambah Lagu Baru</h3>
-              <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={() => setShowAddModal(false)}>
+              <h3 className="text-headline">{editingSong ? 'Edit Lagu' : 'Tambah Lagu Baru'}</h3>
+              <button className="btn btn-ghost" style={{ padding: '4px' }} onClick={handleCloseModal}>
                 <X size={18} />
               </button>
             </div>
@@ -725,7 +803,27 @@ export default function LyricController({ workspaceId, activeState, updateState 
               </div>
 
               <div className="login-form-group">
-                <label className="login-form-label">Lirik Lagu (Format Sections)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="login-form-label">Lirik Lagu (Format Sections)</label>
+                  {newLyricText.trim() && (() => {
+                    const blocks = newLyricText.split('\n\n');
+                    let sectionCount = 0;
+                    let lineCount = 0;
+                    blocks.forEach((block) => {
+                      const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+                      if (lines.length > 0) {
+                        sectionCount++;
+                        let hasHeader = lines[0].startsWith('[') && lines[0].endsWith(']');
+                        lineCount += hasHeader ? lines.length - 1 : lines.length;
+                      }
+                    });
+                    return (
+                      <span style={{ fontSize: '10px', color: 'var(--t2)' }}>
+                        Terdeteksi: {sectionCount} bagian, {lineCount} baris
+                      </span>
+                    );
+                  })()}
+                </div>
                 <textarea
                   className="textarea-field"
                   placeholder="[Verse 1]&#10;Bapa Engkau sungguh baik&#10;KasihMu nyata dalam hidupku&#10;&#10;[Chorus]&#10;Haleluya kami memujiMu&#10;Haleluya selamanya"
@@ -736,11 +834,11 @@ export default function LyricController({ workspaceId, activeState, updateState 
               </div>
 
               <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-md)' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
+                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
                   Batal
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  Simpan Lagu
+                  {editingSong ? 'Update Lagu' : 'Simpan Lagu'}
                 </button>
               </div>
             </form>
