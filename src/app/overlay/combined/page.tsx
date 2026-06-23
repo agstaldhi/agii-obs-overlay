@@ -74,12 +74,14 @@ function CombinedOverlayContent() {
   useEffect(() => {
     if (!workspaceId) return;
 
+    let active = true;
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
 
     const fetchInitialState = async () => {
       try {
         const res = await fetch(`/api/state?w=${workspaceId}`);
+        if (!active) return;
         if (res.ok) {
           const data = await res.json();
           setActiveState(data);
@@ -90,11 +92,12 @@ function CombinedOverlayContent() {
     };
 
     const connectSSE = () => {
+      if (!active) return;
       if (eventSource) eventSource.close();
       eventSource = new EventSource(`/api/state/sse?w=${workspaceId}`);
 
       eventSource.onmessage = (event) => {
-        if (event.data.trim() === 'ping' || event.data.trim() === 'connected') return;
+        if (!active) return;
         try {
           const data = JSON.parse(event.data);
           setActiveState(data);
@@ -104,14 +107,19 @@ function CombinedOverlayContent() {
       };
 
       eventSource.onerror = () => {
-        if (eventSource) eventSource.close();
-        reconnectTimeout = setTimeout(connectSSE, 3000);
+        if (active) {
+          if (eventSource) eventSource.close();
+          reconnectTimeout = setTimeout(connectSSE, 3000);
+        }
       };
     };
 
-    fetchInitialState().then(connectSSE);
+    fetchInitialState().then(() => {
+      if (active) connectSSE();
+    });
 
     return () => {
+      active = false;
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
@@ -569,6 +577,26 @@ function CombinedOverlayContent() {
                     <div className="lt-clean-cyan-right">{currentLT.name}</div>
                   </div>
                 );
+              case 'Minimal Dark':
+                return (
+                  <div ref={ltCardRef} className="overlay-lower-third-card" style={{ backgroundColor: '#000000', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div className="overlay-lower-third-content" style={{ padding: '16px 28px' }}>
+                      <div className="overlay-lower-third-name">{currentLT.name}</div>
+                      <div className="overlay-lower-third-role">{currentLT.role}</div>
+                    </div>
+                  </div>
+                );
+              case 'Accent Strip':
+                return (
+                  <div ref={ltCardRef} className="overlay-lower-third-card">
+                    <div className="overlay-lower-third-accent" style={{ width: '12px' }}></div>
+                    <div className="overlay-lower-third-content">
+                      <div className="overlay-lower-third-name">{currentLT.name}</div>
+                      <div className="overlay-lower-third-role">{currentLT.role}</div>
+                    </div>
+                  </div>
+                );
+              case 'Slide Bottom':
               default:
                 return (
                   <div ref={ltCardRef} className="overlay-lower-third-card">
@@ -631,6 +659,7 @@ function CombinedOverlayContent() {
           `}</style>
           <div className="marquee-container">
             <div 
+              key={`${currentRT}-${rtSpeed}`}
               className="marquee-text"
               style={{ 
                 animationDuration: getRTDuration(),

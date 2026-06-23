@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        source: '/api/state',
+        headers: [
+          { key: 'Cache-Control', value: 's-maxage=1, stale-while-revalidate=2' },
+        ],
+      },
+      {
         source: '/api/state/sse',
         headers: [
           { key: 'Cache-Control', value: 'no-cache, no-transform' },

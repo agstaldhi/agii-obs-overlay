@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, X, Type, Send, EyeOff } from 'lucide-react';
 import StagePreview from './StagePreview';
 
@@ -18,15 +18,17 @@ export default function RunningTextForm({ workspaceId, activeState, updateState 
   const [fontFamily, setFontFamily] = useState('Inter');
 
   // Sync state if it changed externally
+  const isEditingRef = useRef(false);
+  
   useEffect(() => {
-    if (activeState?.running_text) {
+    if (!isEditingRef.current && activeState?.running_text) {
       setText(activeState.running_text.text || '');
       setSpeed(activeState.running_text.speed || 5);
       setScale(activeState.running_text.scale || 1.0);
       setBgColor(activeState.running_text.bg_color || 'rgba(15, 17, 25, 0.85)');
       setFontFamily(activeState.running_text.font_family || 'Inter');
     }
-  }, [activeState]);
+  }, [activeState?.running_text]);
 
   const handleConfigChange = async (updateObj: any) => {
     if (activeState?.running_text?.visible) {
@@ -90,18 +92,15 @@ export default function RunningTextForm({ workspaceId, activeState, updateState 
         }
 
         .marquee-inner-preview {
-          position: absolute;
+          display: flex;
           white-space: nowrap;
-          animation: marquee-preview-anim 15s linear infinite;
-          padding-left: 100%;
-          color: #ffffff;
-          font-weight: 500;
-          font-size: 13px;
+          animation: marquee-preview-seamless linear infinite;
+          will-change: transform;
         }
 
-        @keyframes marquee-preview-anim {
+        @keyframes marquee-preview-seamless {
           0% { transform: translate3d(0, 0, 0); }
-          100% { transform: translate3d(-100%, 0, 0); }
+          100% { transform: translate3d(-50%, 0, 0); }
         }
 
         .control-sliders {
@@ -194,6 +193,8 @@ export default function RunningTextForm({ workspaceId, activeState, updateState 
           placeholder="Ketikkan pengumuman, ayat ringkas, atau pesan selamat datang..."
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onFocus={() => { isEditingRef.current = true; }}
+          onBlur={() => { isEditingRef.current = false; }}
         />
       </div>
 
@@ -304,12 +305,14 @@ export default function RunningTextForm({ workspaceId, activeState, updateState 
           }}
         >
           <div 
+            key={`${text}-${speed}`} // force remount to restart animation
             className="marquee-inner-preview"
             style={{ 
-              animationDuration: `${Math.max(5, 30 - speed * 2.5)}s` 
+              animationDuration: `${Math.max(4, 25 - speed * 2)}s` 
             }}
           >
-            {text || 'Ketikkan teks berjalan...'}
+            <span style={{ paddingRight: '100px', color: '#ffffff', fontWeight: 600, fontSize: '13px' }}>{text || 'Ketikkan teks berjalan...'}</span>
+            <span style={{ paddingRight: '100px', color: '#ffffff', fontWeight: 600, fontSize: '13px' }}>{text || 'Ketikkan teks berjalan...'}</span>
           </div>
         </div>
       </div>

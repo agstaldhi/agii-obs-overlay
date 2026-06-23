@@ -6,17 +6,34 @@ import path from 'path';
 const STATE_FILE_PATH = path.join(process.cwd(), 'data', 'state.json');
 
 // Helper to read state from file
-function readStateFile() {
+async function readStateFile() {
   try {
     if (!fs.existsSync(STATE_FILE_PATH)) {
       return { songs: [], overlay_states: {} };
     }
-    const data = fs.readFileSync(STATE_FILE_PATH, 'utf-8');
+    const data = await fs.promises.readFile(STATE_FILE_PATH, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
     console.error('Error reading state file:', error);
     return { songs: [], overlay_states: {} };
   }
+}
+
+// Helper to prune workspaces older than 30 days
+const PRUNE_DAYS = 30;
+function pruneOldWorkspaces(db: any): boolean {
+  const cutoff = Date.now() - PRUNE_DAYS * 24 * 60 * 60 * 1000;
+  let pruned = false;
+  if (db.overlay_states) {
+    Object.keys(db.overlay_states).forEach((wsId) => {
+      const wsState = db.overlay_states[wsId];
+      if (wsState.updated_at && wsState.updated_at < cutoff) {
+        delete db.overlay_states[wsId];
+        pruned = true;
+      }
+    });
+  }
+  return pruned;
 }
 
 let writeQueue: Promise<void> = Promise.resolve();
@@ -78,7 +95,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Workspace ID (w) is required' }, { status: 400 });
   }
 
-  const db = readStateFile();
+  const db = await readStateFile();
   const state = db.overlay_states?.[workspaceId] || {
     workspace_id: workspaceId,
     active_song_id: '',
@@ -112,7 +129,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const newState = await req.json();
-    const db = readStateFile();
+    const db = await readStateFile();
     
     if (!db.overlay_states) {
       db.overlay_states = {};
@@ -128,6 +145,7 @@ export async function POST(req: NextRequest) {
     };
 
     db.overlay_states[workspaceId] = updatedWorkspaceState;
+    pruneOldWorkspaces(db);
     await writeStateFile(db);
 
     // Notify all active SSE clients

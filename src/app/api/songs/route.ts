@@ -7,12 +7,12 @@ import { cookies } from 'next/headers';
 const STATE_FILE_PATH = path.join(process.cwd(), 'data', 'state.json');
 
 // Local file database helpers
-function readStateFile() {
+async function readStateFile() {
   try {
     if (!fs.existsSync(STATE_FILE_PATH)) {
       return { songs: [], overlay_states: {} };
     }
-    const data = fs.readFileSync(STATE_FILE_PATH, 'utf-8');
+    const data = await fs.promises.readFile(STATE_FILE_PATH, 'utf-8');
     return JSON.parse(data);
   } catch (error) {
     console.error('Error reading state file:', error);
@@ -38,6 +38,7 @@ function writeStateFile(data: any) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const query = searchParams.get('q')?.toLowerCase() || '';
+  const id = searchParams.get('id');
 
   // Get active workspace from query param or cookie
   const workspaceId = searchParams.get('w') || (await cookies()).get('lumen-workspace')?.value || 'lumen-123';
@@ -50,6 +51,10 @@ export async function GET(req: NextRequest) {
         .select('*')
         .eq('workspace_id', workspaceId);
 
+      if (id) {
+        dbQuery = dbQuery.eq('id', id);
+      }
+
       const { data, error } = await dbQuery;
 
       if (error) {
@@ -57,6 +62,11 @@ export async function GET(req: NextRequest) {
       }
 
       const songs = data || [];
+
+      if (id) {
+        return NextResponse.json(songs[0] || null);
+      }
+
       if (!query) {
         return NextResponse.json(songs);
       }
@@ -76,8 +86,13 @@ export async function GET(req: NextRequest) {
   }
 
   // 2. Offline Mode or Fallback: fetch from state.json
-  const db = readStateFile();
+  const db = await readStateFile();
   const songs = db.songs || [];
+
+  if (id) {
+    const song = songs.find((s: any) => s.id === id) || null;
+    return NextResponse.json(song);
+  }
 
   if (!query) {
     return NextResponse.json(songs);
@@ -142,7 +157,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Save locally
-    const db = readStateFile();
+    const db = await readStateFile();
     if (!db.songs) {
       db.songs = [];
     }
@@ -207,7 +222,7 @@ export async function PUT(req: NextRequest) {
     }
 
     // 2. Update locally
-    const db = readStateFile();
+    const db = await readStateFile();
     if (!db.songs) db.songs = [];
 
     const songIndex = db.songs.findIndex((s: any) => s.id === songData.id);
@@ -257,7 +272,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // 2. Delete locally
-    const db = readStateFile();
+    const db = await readStateFile();
     if (db.songs) {
       db.songs = db.songs.filter((s: any) => s.id !== id);
       writeStateFile(db);

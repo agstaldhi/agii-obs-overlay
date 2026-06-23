@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar, { TabType } from '@/components/dashboard/Sidebar';
 import LyricController from '@/components/dashboard/LyricController';
 import BibleSearch from '@/components/dashboard/BibleSearch';
@@ -13,7 +13,14 @@ import { Activity, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabType>('lyric');
-  const [workspaceId, setWorkspaceId] = useState('lumen-123');
+  const [workspaceId] = useState(() => {
+    if (typeof window === 'undefined') return 'lumen-123';
+    const name = 'lumen-workspace';
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift() || 'lumen-123';
+    return 'lumen-123';
+  });
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'reconnecting' | 'offline'>('offline');
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
   const [activeState, setActiveState] = useState<any>({
@@ -33,34 +40,18 @@ export default function DashboardPage() {
     verse_config: { x: 0, y: 0, scale: 1.0 },
     lower_third_config: { x: 0, y: 0, scale: 1.0 }
   });
-
-  // Helper to read cookie client-side
-  const getCookie = (name: string) => {
-    if (typeof document === 'undefined') return '';
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(';').shift() || '';
-    return '';
-  };
-
-  // Get workspace ID from cookies on mount
-  useEffect(() => {
-    const ws = getCookie('lumen-workspace');
-    if (ws) {
-      setWorkspaceId(ws);
-    }
-  }, []);
-
   // Fetch initial state and subscribe to Server-Sent Events (SSE) for realtime sync
   useEffect(() => {
     if (!workspaceId) return;
 
+    let active = true;
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
 
     const fetchInitialState = async () => {
       try {
         const res = await fetch(`/api/state?w=${workspaceId}`);
+        if (!active) return;
         if (res.ok) {
           const data = await res.json();
           setActiveState(data);
@@ -68,11 +59,12 @@ export default function DashboardPage() {
         }
       } catch (err) {
         console.error('Failed to fetch initial state:', err);
-        setConnectionStatus('reconnecting');
+        if (active) setConnectionStatus('reconnecting');
       }
     };
 
     const connectSSE = () => {
+      if (!active) return;
       if (eventSource) {
         eventSource.close();
       }
@@ -80,13 +72,11 @@ export default function DashboardPage() {
       eventSource = new EventSource(`/api/state/sse?w=${workspaceId}`);
 
       eventSource.onopen = () => {
-        setConnectionStatus('connected');
+        if (active) setConnectionStatus('connected');
       };
 
       eventSource.onmessage = (event) => {
-        // Skip keepalive ping comments
-        if (event.data.trim() === 'ping' || event.data.trim() === 'connected') return;
-        
+        if (!active) return;
         try {
           const newState = JSON.parse(event.data);
           setActiveState(newState);
@@ -97,34 +87,32 @@ export default function DashboardPage() {
 
       eventSource.onerror = (err) => {
         console.error('SSE Connection failed. Reconnecting...', err);
-        setConnectionStatus('reconnecting');
-        
-        // Auto reconnect after 3 seconds
-        if (eventSource) {
-          eventSource.close();
+        if (active) {
+          setConnectionStatus('reconnecting');
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          reconnectTimeout = setTimeout(connectSSE, 3000);
         }
-        
-        reconnectTimeout = setTimeout(() => {
-          connectSSE();
-        }, 3000);
       };
     };
 
     fetchInitialState().then(() => {
-      connectSSE();
+      if (active) connectSSE();
     });
 
     return () => {
+      active = false;
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [workspaceId, reconnectTrigger]);
 
   // Update state helper (POST to /api/state)
-  const updateState = async (newState: any) => {
+  const updateState = useCallback(async (newState: any) => {
     // Optimistic update client-side
-    const mergedState = { ...activeState, ...newState };
-    setActiveState(mergedState);
+    setActiveState((prev: any) => ({ ...prev, ...newState }));
 
     try {
       const res = await fetch(`/api/state?w=${workspaceId}`, {
@@ -139,7 +127,7 @@ export default function DashboardPage() {
       console.error(err);
       setConnectionStatus('reconnecting');
     }
-  };
+  }, [workspaceId]);
 
   const getConnectionStatusColor = () => {
     switch (connectionStatus) {

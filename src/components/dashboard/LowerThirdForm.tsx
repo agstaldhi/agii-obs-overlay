@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, Send, Plus, Trash2, User } from 'lucide-react';
 import StagePreview from './StagePreview';
 
@@ -56,13 +56,17 @@ export default function LowerThirdForm({ workspaceId, activeState, updateState }
   const [animOut, setAnimOut] = useState('Fade out');
   const [durationIn, setDurationIn] = useState('0.6s');
   const [durationOut, setDurationOut] = useState('0.4s');
+  const [previewProfile, setPreviewProfile] = useState<LowerThirdProfile | null>(null);
 
   // Initialize lower_thirds in activeState if undefined
+  const hasInitializedRef = useRef(false);
+
   useEffect(() => {
-    if (activeState && activeState.lower_thirds === undefined) {
+    if (!hasInitializedRef.current && activeState && activeState.lower_thirds === undefined) {
+      hasInitializedRef.current = true;
       updateState({ lower_thirds: DEFAULT_PROFILES });
     }
-  }, [activeState, updateState]);
+  }, [activeState?.lower_thirds, updateState]);
 
   // Save profiles helper
   const saveProfilesList = (newList: LowerThirdProfile[]) => {
@@ -489,8 +493,32 @@ export default function LowerThirdForm({ workspaceId, activeState, updateState }
 
       {/* Stage Preview */}
       <div>
-        <div className="section-label" style={{ marginBottom: 'var(--space-sm)' }}>Stage Preview (Lower Third)</div>
-        <StagePreview state={{ ...activeState, overlay_type: 'lower-third' }} />
+        <div className="section-label" style={{ marginBottom: 'var(--space-sm)', display: 'flex', justifyContent: 'space-between' }}>
+          <span>Stage Preview (Lower Third)</span>
+          {previewProfile && <span style={{ color: 'var(--accent)', fontSize: '10px', fontWeight: 'bold' }}>PREVIEW EDIT</span>}
+        </div>
+        <StagePreview 
+          state={
+            previewProfile 
+              ? { 
+                  ...activeState, 
+                  overlay_type: 'lower-third', 
+                  lower_third: { 
+                    id: previewProfile.id,
+                    name: previewProfile.name,
+                    role: previewProfile.role,
+                    template: previewProfile.template,
+                    anim_in: previewProfile.animIn,
+                    anim_out: previewProfile.animOut,
+                    duration_in: previewProfile.durationIn,
+                    duration_out: previewProfile.durationOut,
+                    visible: true
+                  },
+                  is_cleared: false
+                }
+              : { ...activeState, overlay_type: 'lower-third' }
+          } 
+        />
       </div>
 
       {/* Profiles List */}
@@ -498,8 +526,16 @@ export default function LowerThirdForm({ workspaceId, activeState, updateState }
         {profiles.length > 0 ? (
           profiles.map((profile) => {
             const live = isProfileLive(profile.id);
+            const isPreviewed = previewProfile?.id === profile.id;
             return (
-              <div key={profile.id} className={`profile-row ${live ? 'live' : ''}`}>
+              <div 
+                key={profile.id} 
+                className={`profile-row ${live ? 'live' : ''}`}
+                onMouseEnter={() => setPreviewProfile(profile)}
+                onMouseLeave={() => setPreviewProfile(null)}
+                onClick={() => setPreviewProfile(profile)}
+                style={{ cursor: 'pointer', borderColor: isPreviewed && !live ? 'var(--accent-border)' : undefined, backgroundColor: isPreviewed && !live ? 'var(--bg-3)' : undefined }}
+              >
                 <div className="profile-details">
                   <User size={18} style={{ color: live ? 'var(--accent)' : 'var(--t3)' }} />
                   <div className="profile-text">

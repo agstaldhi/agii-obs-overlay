@@ -33,12 +33,14 @@ function OverlayVerseContent() {
   useEffect(() => {
     if (!workspaceId) return;
 
+    let active = true;
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
 
     const fetchInitialState = async () => {
       try {
         const res = await fetch(`/api/state?w=${workspaceId}`);
+        if (!active) return;
         if (res.ok) {
           const data = await res.json();
           setActiveState(data);
@@ -49,11 +51,12 @@ function OverlayVerseContent() {
     };
 
     const connectSSE = () => {
+      if (!active) return;
       if (eventSource) eventSource.close();
       eventSource = new EventSource(`/api/state/sse?w=${workspaceId}`);
 
       eventSource.onmessage = (event) => {
-        if (event.data.trim() === 'ping' || event.data.trim() === 'connected') return;
+        if (!active) return;
         try {
           const data = JSON.parse(event.data);
           setActiveState(data);
@@ -63,14 +66,19 @@ function OverlayVerseContent() {
       };
 
       eventSource.onerror = () => {
-        if (eventSource) eventSource.close();
-        reconnectTimeout = setTimeout(connectSSE, 3000);
+        if (active) {
+          if (eventSource) eventSource.close();
+          reconnectTimeout = setTimeout(connectSSE, 3000);
+        }
       };
     };
 
-    fetchInitialState().then(connectSSE);
+    fetchInitialState().then(() => {
+      if (active) connectSSE();
+    });
 
     return () => {
+      active = false;
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
@@ -144,6 +152,7 @@ function OverlayVerseContent() {
     boxShadow: 'none',
     backdropFilter: 'none',
     transformOrigin: 'bottom center',
+    opacity: 0,
     ...(isBottomBanner 
       ? { left: '160px', bottom: '80px', top: 'auto', transform: `translate(0, 0) translate(${config.x}px, ${config.y}px) scale(${config.scale})` }
       : { top: '50%', left: '50%', transform: `translate(-50%, -50%) translate(${config.x}px, ${config.y}px) scale(${config.scale})` }
@@ -154,6 +163,7 @@ function OverlayVerseContent() {
     <div className="overlay-body">
       {currentVerse && (
         <div 
+          ref={containerRef}
           className="overlay-container-verse" 
           style={containerStyle}
         >
@@ -164,7 +174,7 @@ function OverlayVerseContent() {
             switch (currentVerse.template) {
               case 'Blue Banner':
                 return (
-                  <div ref={containerRef} className="lt-bible-blue-banner" style={{ opacity: 0 }}>
+                  <div className="lt-bible-blue-banner">
                     <div className="lt-bible-blue-ref">{ref}</div>
                     <div className="lt-bible-blue-body">
                       {/* Open book icon with red ribbon */}
@@ -193,7 +203,7 @@ function OverlayVerseContent() {
                 );
               case 'Charcoal Grid':
                 return (
-                  <div ref={containerRef} className="lt-bible-charcoal-grid" style={{ opacity: 0 }}>
+                  <div className="lt-bible-charcoal-grid">
                     {/* Open book icon with red ribbon */}
                     <svg viewBox="0 0 64 64" className="lt-bible-book-icon" fill="none">
                       <path d="M6 46c6-4 18-4 26-2V10C24 8 12 8 6 12v34z" fill="#f5f5f5" stroke="#111111" strokeWidth="2.5" strokeLinejoin="round"/>
@@ -221,9 +231,7 @@ function OverlayVerseContent() {
                 // Default Classic Box template
                 return (
                   <div 
-                    ref={containerRef} 
                     style={{ 
-                      opacity: 0, 
                       display: 'flex', 
                       flexDirection: 'column', 
                       alignItems: 'center', 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Plus, X, Play, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
 import StagePreview from './StagePreview';
 
@@ -132,6 +132,10 @@ export default function LyricController({ workspaceId, activeState, updateState 
     return flat;
   };
 
+  const flatLines = useMemo(() => {
+    return loadedSong ? getFlatLines(loadedSong) : [];
+  }, [loadedSong]);
+
   const getFlatIndex = (flatLines: any[], secIdx: number, lineIdx: number) => {
     return flatLines.findIndex(item => item.secIdx === secIdx && item.lineIdx === lineIdx);
   };
@@ -139,7 +143,7 @@ export default function LyricController({ workspaceId, activeState, updateState 
   // Go to next line
   const handleNextLine = async () => {
     if (!loadedSong) return;
-    const flat = getFlatLines(loadedSong);
+    const flat = flatLines;
     const currentIdx = getFlatIndex(flat, activeState.active_section_index, activeState.active_line_index);
     
     if (activeState.is_cleared) {
@@ -159,7 +163,7 @@ export default function LyricController({ workspaceId, activeState, updateState 
   // Go to previous line
   const handlePrevLine = async () => {
     if (!loadedSong) return;
-    const flat = getFlatLines(loadedSong);
+    const flat = flatLines;
     const currentIdx = getFlatIndex(flat, activeState.active_section_index, activeState.active_line_index);
 
     if (activeState.is_cleared) {
@@ -202,29 +206,42 @@ export default function LyricController({ workspaceId, activeState, updateState 
     });
   };
 
+  const handleNextLineRef = useRef(handleNextLine);
+  const handlePrevLineRef = useRef(handlePrevLine);
+  const handleClearScreenRef = useRef(handleClearScreen);
+  const showAddModalRef = useRef(showAddModal);
+
+  useEffect(() => { handleNextLineRef.current = handleNextLine; });
+  useEffect(() => { handlePrevLineRef.current = handlePrevLine; });
+  useEffect(() => { handleClearScreenRef.current = handleClearScreen; });
+  useEffect(() => { showAddModalRef.current = showAddModal; }, [showAddModal]);
+
   // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore shortcuts if user is typing in inputs or textareas
+      // Ignore shortcuts if modal is open or user is typing in inputs or textareas
+      if (showAddModalRef.current) {
+        return;
+      }
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
         return;
       }
 
       if (e.code === 'Space' || e.code === 'ArrowDown' || e.code === 'ArrowRight') {
         e.preventDefault();
-        handleNextLine();
+        handleNextLineRef.current();
       } else if (e.code === 'ArrowUp' || e.code === 'ArrowLeft') {
         e.preventDefault();
-        handlePrevLine();
+        handlePrevLineRef.current();
       } else if (e.code === 'Escape') {
         e.preventDefault();
-        handleClearScreen();
+        handleClearScreenRef.current();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [loadedSong, activeState]);
+  }, []);
 
   const getReconstructedLyrics = (song: Song) => {
     return song.sections.map(sec => {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, ArrowRight, X, AlertCircle } from 'lucide-react';
 
@@ -18,28 +18,7 @@ interface Song {
   sections: SongSection[];
 }
 
-const DEFAULT_PROFILES = [
-  {
-    id: 'lt-1',
-    name: 'Pdt. Yohanes Susanto',
-    role: 'Gembala Sidang',
-    template: 'Slide Bottom',
-    animIn: 'Slide from left',
-    animOut: 'Fade out',
-    durationIn: '0.6s',
-    durationOut: '0.4s'
-  },
-  {
-    id: 'lt-2',
-    name: 'Bp. Budi Prakoso',
-    role: 'Worship Leader',
-    template: 'Accent Strip',
-    animIn: 'Slide Up',
-    animOut: 'Slide down',
-    durationIn: '0.5s',
-    durationOut: '0.5s'
-  }
-];
+
 
 export default function ObsDockPage() {
   return (
@@ -51,7 +30,14 @@ export default function ObsDockPage() {
 
 function ObsDockContent() {
   const searchParams = useSearchParams();
-  const workspaceId = searchParams.get('w') || 'lumen-123';
+  const workspaceId = searchParams.get('w') || (() => {
+    if (typeof window === 'undefined') return 'lumen-123';
+    const name = 'lumen-workspace';
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift() || 'lumen-123';
+    return 'lumen-123';
+  })();
 
   const [activeState, setActiveState] = useState<any>({
     workspace_id: workspaceId,
@@ -90,12 +76,14 @@ function ObsDockContent() {
   useEffect(() => {
     if (!workspaceId) return;
 
+    let active = true;
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
 
     const fetchInitialState = async () => {
       try {
         const res = await fetch(`/api/state?w=${workspaceId}`);
+        if (!active) return;
         if (res.ok) {
           const data = await res.json();
           setActiveState(data);
@@ -103,20 +91,21 @@ function ObsDockContent() {
         }
       } catch (err) {
         console.error(err);
-        setConnectionStatus('reconnecting');
+        if (active) setConnectionStatus('reconnecting');
       }
     };
 
     const connectSSE = () => {
+      if (!active) return;
       if (eventSource) eventSource.close();
       eventSource = new EventSource(`/api/state/sse?w=${workspaceId}`);
 
       eventSource.onopen = () => {
-        setConnectionStatus('connected');
+        if (active) setConnectionStatus('connected');
       };
 
       eventSource.onmessage = (event) => {
-        if (event.data.trim() === 'ping' || event.data.trim() === 'connected') return;
+        if (!active) return;
         try {
           const data = JSON.parse(event.data);
           setActiveState(data);
@@ -126,15 +115,23 @@ function ObsDockContent() {
       };
 
       eventSource.onerror = () => {
-        setConnectionStatus('reconnecting');
-        if (eventSource) eventSource.close();
-        reconnectTimeout = setTimeout(connectSSE, 3000);
+        if (active) {
+          setConnectionStatus('reconnecting');
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          reconnectTimeout = setTimeout(connectSSE, 3000);
+        }
       };
     };
 
-    fetchInitialState().then(connectSSE);
+    fetchInitialState().then(() => {
+      if (active) connectSSE();
+    });
 
     return () => {
+      active = false;
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
@@ -189,7 +186,7 @@ function ObsDockContent() {
 
   const handleNextLine = async () => {
     if (!loadedSong) return;
-    const flat = getFlatLines(loadedSong);
+    const flat = flatLines;
     const currentIdx = getFlatIndex(flat, activeState.active_section_index, activeState.active_line_index);
 
     if (activeState.is_cleared) {
@@ -207,7 +204,7 @@ function ObsDockContent() {
 
   const handlePrevLine = async () => {
     if (!loadedSong) return;
-    const flat = getFlatLines(loadedSong);
+    const flat = flatLines;
     const currentIdx = getFlatIndex(flat, activeState.active_section_index, activeState.active_line_index);
 
     if (activeState.is_cleared) {
@@ -294,7 +291,7 @@ function ObsDockContent() {
   };
 
   const handleClearBible = async () => {
-    await updateState({ bible_verse: null });
+    await updateState({ bible_verse: { reference: '', text_id: '', text_en: '', display_mode: 'id' } });
   };
 
   const handleClearLowerThird = async () => {
@@ -322,7 +319,7 @@ function ObsDockContent() {
   const handleClearAll = async () => {
     await updateState({
       is_cleared: true,
-      bible_verse: null,
+      bible_verse: { reference: '', text_id: '', text_en: '', display_mode: 'id' },
       lower_third: { ...activeState?.lower_third, visible: false },
       running_text: { ...activeState?.running_text, visible: false },
       shader_active: false
@@ -365,39 +362,32 @@ function ObsDockContent() {
     );
   };
 
-  // Determine current display content
-  let currentOnScreenText = 'SCREEN CLEAR';
-  if (!activeState.is_cleared) {
-    if (activeState.overlay_type === 'lyric' && loadedSong) {
-      const sec = loadedSong.sections[activeState.active_section_index];
-      currentOnScreenText = sec?.lines[activeState.active_line_index] || '';
-    } else if (activeState.overlay_type === 'verse' && activeState.bible_verse) {
-      const isEn = activeState.bible_verse.display_mode === 'en';
-      currentOnScreenText = isEn ? activeState.bible_verse.text_en : activeState.bible_verse.text_id;
-    } else if (activeState.overlay_type === 'lower-third' && activeState.lower_third?.visible) {
-      currentOnScreenText = `${activeState.lower_third.name} - ${activeState.lower_third.role}`;
-    }
-  }
+  const activeLyrics = !activeState.is_cleared && activeState.overlay_type === 'lyric' && loadedSong
+    ? (loadedSong.sections[activeState.active_section_index]?.lines[activeState.active_line_index] || '')
+    : '';
 
-  if (activeState.running_text?.visible) {
-    const runningDesc = `[Text] ${activeState.running_text.text?.slice(0, 30)}${activeState.running_text.text?.length > 30 ? '...' : ''}`;
-    if (currentOnScreenText === 'SCREEN CLEAR') {
-      currentOnScreenText = runningDesc;
-    } else {
-      currentOnScreenText = `${currentOnScreenText} | ${runningDesc}`;
-    }
-  }
+  const activeVerse = !activeState.is_cleared && activeState.overlay_type === 'verse' && activeState.bible_verse?.reference
+    ? (activeState.bible_verse.display_mode === 'en' ? activeState.bible_verse.text_en : activeState.bible_verse.text_id)
+    : '';
 
-  if (activeState.shader_active) {
-    const shaderDesc = `[Shader] ${activeState.shader_mode || 'Background'}`;
-    if (currentOnScreenText === 'SCREEN CLEAR') {
-      currentOnScreenText = shaderDesc;
-    } else {
-      currentOnScreenText = `${currentOnScreenText} | ${shaderDesc}`;
-    }
-  }
+  const activeLowerThird = !activeState.is_cleared && activeState.overlay_type === 'lower-third' && activeState.lower_third?.visible
+    ? `${activeState.lower_third.name}${activeState.lower_third.role ? ` - ${activeState.lower_third.role}` : ''}`
+    : '';
 
-  const flatLines = loadedSong ? getFlatLines(loadedSong) : [];
+  const activeRunningText = activeState.running_text?.visible && activeState.running_text?.text
+    ? activeState.running_text.text
+    : '';
+
+  const activeShader = activeState.shader_active && activeState.shader_mode
+    ? activeState.shader_mode
+    : '';
+
+  const isAnythingLive = activeLyrics || activeVerse || activeLowerThird || activeRunningText || activeShader;
+
+  const flatLines = useMemo(() => 
+    loadedSong ? getFlatLines(loadedSong) : [], 
+    [loadedSong]
+  );
 
   return (
     <div className="obs-dock-layout">
@@ -467,9 +457,10 @@ function ObsDockContent() {
           flex-shrink: 0;
         }
 
-        /* Preview Area (72px) */
+        /* Preview Area */
         .dock-preview-area {
-          height: 72px;
+          min-height: 72px;
+          height: auto;
           padding: var(--space-sm) var(--space-md);
           background-color: var(--bg-0);
           border-bottom: 1px solid var(--bg-4);
@@ -484,7 +475,7 @@ function ObsDockContent() {
           font-weight: 600;
           color: var(--t3);
           text-transform: uppercase;
-          margin-bottom: 2px;
+          margin-bottom: 4px;
         }
 
         .preview-box {
@@ -494,10 +485,7 @@ function ObsDockContent() {
           padding: 6px 10px;
           font-size: 12px;
           font-weight: 500;
-          color: ${activeState.is_cleared ? 'var(--t3)' : '#ffffff'};
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+          color: #ffffff;
           text-align: center;
         }
 
@@ -735,8 +723,18 @@ function ObsDockContent() {
       {/* On Screen Now */}
       <div className="dock-preview-area">
         <div className="preview-label">On Screen Now</div>
-        <div className="preview-box">
-          {currentOnScreenText}
+        <div className="preview-box" style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center', height: 'auto', minHeight: '38px', padding: '8px 12px', whiteSpace: 'normal', overflow: 'visible', lineBreak: 'anywhere' }}>
+          {!isAnythingLive ? (
+            <span style={{ color: 'var(--t3)' }}>SCREEN CLEAR</span>
+          ) : (
+            <>
+              {activeLyrics && <div style={{ fontSize: '11px', color: '#ffffff', fontWeight: 600 }}>🎵 {activeLyrics}</div>}
+              {activeVerse && <div style={{ fontSize: '11px', color: '#e5e7eb' }}>📖 {activeVerse}</div>}
+              {activeLowerThird && <div style={{ fontSize: '10px', color: 'var(--accent)', fontWeight: 500 }}>👤 {activeLowerThird}</div>}
+              {activeRunningText && <div style={{ fontSize: '10px', color: 'var(--success)' }}>📢 {activeRunningText.slice(0, 45)}{activeRunningText.length > 45 ? '...' : ''}</div>}
+              {activeShader && <div style={{ fontSize: '9px', color: 'var(--t2)' }}>🎨 Shader: {activeShader}</div>}
+            </>
+          )}
         </div>
       </div>
 
@@ -794,9 +792,7 @@ function ObsDockContent() {
       ) : (
         <div className="dock-lt-list">
           {(() => {
-            const profilesToShow = activeState?.lower_thirds !== undefined 
-              ? activeState.lower_thirds 
-              : DEFAULT_PROFILES;
+            const profilesToShow = activeState?.lower_thirds || [];
 
             if (profilesToShow.length === 0) {
               return (

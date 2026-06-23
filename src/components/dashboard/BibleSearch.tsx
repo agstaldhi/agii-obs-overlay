@@ -173,6 +173,23 @@ const BIBLE_BOOKS_ENG_MAP: Record<string, string> = {
   'wahyu': 'revelation'
 };
 
+// Helper to estimate maximum verses in a chapter to limit the dropdown
+const getMaxVerses = (bookId: string, chapter: number): number => {
+  if (bookId === 'mazmur') {
+    if (chapter === 119) return 176;
+    if (chapter === 78) return 72;
+    if (chapter === 89) return 52;
+    if (chapter === 105) return 45;
+    if (chapter === 106) return 48;
+    if (chapter === 107) return 43;
+    if (chapter === 118) return 29;
+    if (chapter === 135) return 21;
+    if (chapter === 136) return 26;
+    return 40; // Default max for other Psalms
+  }
+  return 80; // Default max for other books/chapters
+};
+
 export default function BibleSearch({ workspaceId, activeState, updateState }: BibleSearchProps) {
   // Select state
   const [selectedBook, setSelectedBook] = useState('yohanes');
@@ -218,8 +235,25 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
     setSelectedVerse(1);
   }, [selectedBook]);
 
+  // Reset selected verse if it exceeds max verses of the new chapter
+  useEffect(() => {
+    const max = getMaxVerses(selectedBook, selectedChapter);
+    if (selectedVerse > max) {
+      setSelectedVerse(1);
+    }
+  }, [selectedBook, selectedChapter, selectedVerse]);
+
   // Load verse from database/API when selections change
   const loadSelectedVerse = async (signal?: AbortSignal) => {
+    // Validate if selection is in-bounds for the current book (prevents race condition mismatch on book change)
+    if (selectedChapter > currentBookMeta.chapters) {
+      return;
+    }
+    const maxVerses = getMaxVerses(selectedBook, selectedChapter);
+    if (selectedVerse > maxVerses) {
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
@@ -592,8 +626,8 @@ export default function BibleSearch({ workspaceId, activeState, updateState }: B
             value={selectedVerse} 
             onChange={(e) => setSelectedVerse(parseInt(e.target.value))}
           >
-            {/* Render 1 to 200 verses for selection */}
-            {Array.from({ length: 200 }, (_, i) => i + 1).map((v) => (
+            {/* Render up to max verses estimated for selection */}
+            {Array.from({ length: getMaxVerses(selectedBook, selectedChapter) }, (_, i) => i + 1).map((v) => (
               <option key={v} value={v}>
                 {v}
               </option>

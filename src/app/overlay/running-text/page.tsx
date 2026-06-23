@@ -33,12 +33,14 @@ function OverlayRunningTextContent() {
   useEffect(() => {
     if (!workspaceId) return;
 
+    let active = true;
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
 
     const fetchInitialState = async () => {
       try {
         const res = await fetch(`/api/state?w=${workspaceId}`);
+        if (!active) return;
         if (res.ok) {
           const data = await res.json();
           setActiveState(data);
@@ -49,11 +51,12 @@ function OverlayRunningTextContent() {
     };
 
     const connectSSE = () => {
+      if (!active) return;
       if (eventSource) eventSource.close();
       eventSource = new EventSource(`/api/state/sse?w=${workspaceId}`);
 
       eventSource.onmessage = (event) => {
-        if (event.data.trim() === 'ping' || event.data.trim() === 'connected') return;
+        if (!active) return;
         try {
           const data = JSON.parse(event.data);
           setActiveState(data);
@@ -63,14 +66,19 @@ function OverlayRunningTextContent() {
       };
 
       eventSource.onerror = () => {
-        if (eventSource) eventSource.close();
-        reconnectTimeout = setTimeout(connectSSE, 3000);
+        if (active) {
+          if (eventSource) eventSource.close();
+          reconnectTimeout = setTimeout(connectSSE, 3000);
+        }
       };
     };
 
-    fetchInitialState().then(connectSSE);
+    fetchInitialState().then(() => {
+      if (active) connectSSE();
+    });
 
     return () => {
+      active = false;
       if (eventSource) eventSource.close();
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
@@ -155,6 +163,7 @@ function OverlayRunningTextContent() {
 
       <div className="marquee-container">
         <div 
+          key={`${currentText}-${speed}`} // force remount to restart animation cycle
           className="marquee-track"
           style={{ 
             animationDuration: getDuration(),
